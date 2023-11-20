@@ -1,5 +1,8 @@
 import numpy as np
 import gym
+from collections import deque
+import random
+
 
 env = gym.make("CartPole-v0", render_mode="rgb_array")
 
@@ -114,6 +117,87 @@ def Q_learning():
       
   return Qvalue
 
+
+def DQ_learning():
+  Qvalue1 = np.random.rand(NB_STATES, env.action_space.n)
+  Qvalue2 = np.random.rand(NB_STATES, env.action_space.n)
+  for episode in range(EPISODES):
+    obs, _ = env.reset()
+    learning_rate = update_learning_rate(episode)
+    epsilon = update_explore_rate(episode)
+
+    state = obs_to_state(obs)
+    total_reward = 0
+    done = False
+    while not done:
+      # choose action using epsilon-greedy strategy
+      if np.random.random() < epsilon:
+        action = env.action_space.sample()
+      else:
+        action = np.argmax(Qvalue1[state])
+
+      # make a step and update the state
+      obs, reward, done, _, _ = env.step(action)
+      new_state = obs_to_state(obs)
+
+      # update Qvalue with step = learning_rate
+      Qvalue2[state, action] += learning_rate * (reward + Qvalue1[new_state, np.argmax(Qvalue2[new_state])] - Qvalue2[state, action] )
+      Qvalue1[state, action] += learning_rate * (reward + Qvalue2[new_state, np.argmax(Qvalue1[new_state])] - Qvalue1[state, action] )
+      total_reward += reward
+      state = new_state
+
+    if episode % 200 == 0:
+      print('Iteration #%d -- Total reward = %d.' %(episode+1, total_reward))
+      
+  return Qvalue1
+
+
+def maxQ_learning():
+    Qvalue1 = np.random.rand(NB_STATES, env.action_space.n)
+    Qvalue2 = np.random.rand(NB_STATES, env.action_space.n)
+    
+    replay_buffer = deque(maxlen=20)
+    
+    for episode in range(EPISODES):
+        obs, _ = env.reset()
+        learning_rate = update_learning_rate(episode)
+        epsilon = update_explore_rate(episode)
+
+        state = obs_to_state(obs)
+        total_reward = 0
+        done = False
+        
+        while not done:
+            # choose action using epsilon-greedy strategy
+            if np.random.random() < epsilon:
+                action = env.action_space.sample()
+            else:
+                action = np.argmax(Qvalue1[state])
+
+            # make a step and update the state
+            obs, reward, done, _, _ = env.step(action)
+            new_state = obs_to_state(obs)
+
+            # store experience in replay buffer
+            replay_buffer.append((state, action, reward, new_state, done))
+
+            # update Q-values using experience replay
+            if len(replay_buffer) >= 5:
+                experiences = np.array(random.sample(replay_buffer, 5))
+
+                states, actions, rewards, next_states, dones = experiences.T
+                
+                Qvalue2[states, actions] += learning_rate * (rewards + np.max(Qvalue1[next_states], axis=1) * (1 - dones) - Qvalue2[states, actions])
+                Qvalue1[states, actions] += learning_rate * (rewards + np.max(Qvalue2[next_states], axis=1) * (1 - dones) - Qvalue1[states, actions])
+
+            total_reward += reward
+            state = new_state
+
+        if episode % 200 == 0:
+            print('Iteration #%d -- Total reward = %d.' % (episode + 1, total_reward))
+
+    return Qvalue1
+
 def SARSA():
   Qvalue = np.random.rand(NB_STATES, env.action_space.n)
   for episode in range(EPISODES):
@@ -152,7 +236,7 @@ def SARSA():
       
   return Qvalue
 
-Qvalue = Q_learning()
+Qvalue = DQ_learning()
 # Qvalue = SARSA()
 policy = np.argmax(Qvalue, axis=1)
 
