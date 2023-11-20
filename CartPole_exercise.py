@@ -118,85 +118,38 @@ def Q_learning():
   return Qvalue
 
 
-def DQ_learning():
-  Qvalue1 = np.random.rand(NB_STATES, env.action_space.n)
-  Qvalue2 = np.random.rand(NB_STATES, env.action_space.n)
-  for episode in range(EPISODES):
+def QQ_learning():
+  Q1 = np.random.rand(NB_STATES, env.action_space.n)
+  Q2 = np.random.rand(NB_STATES, env.action_space.n)
+  
+  for ep in range(EPISODES):
     obs, _ = env.reset()
-    learning_rate = update_learning_rate(episode)
-    epsilon = update_explore_rate(episode)
-
-    state = obs_to_state(obs)
-    total_reward = 0
+    lr = update_learning_rate(ep)
+    eps = update_explore_rate(ep)
+    s = obs_to_state(obs)
+    tr = 0
     done = False
+
     while not done:
-      # choose action using epsilon-greedy strategy
-      if np.random.random() < epsilon:
-        action = env.action_space.sample()
+      if np.random.random() < eps:
+        a = env.action_space.sample()
       else:
-        action = np.argmax(Qvalue1[state])
+        a = np.argmax(Q1[s])
+      obs, r, done, _, _ = env.step(a)
+      ns = obs_to_state(obs)
 
-      # make a step and update the state
-      obs, reward, done, _, _ = env.step(action)
-      new_state = obs_to_state(obs)
-
-      # update Qvalue with step = learning_rate
-      Qvalue2[state, action] += learning_rate * (reward + Qvalue1[new_state, np.argmax(Qvalue2[new_state])] - Qvalue2[state, action] )
-      Qvalue1[state, action] += learning_rate * (reward + Qvalue2[new_state, np.argmax(Qvalue1[new_state])] - Qvalue1[state, action] )
-      total_reward += reward
-      state = new_state
-
-    if episode % 200 == 0:
-      print('Iteration #%d -- Total reward = %d.' %(episode+1, total_reward))
+      # update Qx with step equal to lr and use previous Qx values
+      Q2[s, a] += lr * (r + Q1[ns, np.argmax(Q2[ns])] - Q2[s, a])
+      Q1[s, a] += lr * (r + Q2[ns, np.argmax(Q1[ns])] - Q1[s, a])
       
-  return Qvalue1
+      tr += r
+      s = ns
 
+      if ep % 200 == 0:
+        print('Iteration #%d -- Total reward = %d.' %(ep+1, tr))
+      
+  return Q1
 
-def maxQ_learning():
-    Qvalue1 = np.random.rand(NB_STATES, env.action_space.n)
-    Qvalue2 = np.random.rand(NB_STATES, env.action_space.n)
-    
-    replay_buffer = deque(maxlen=20)
-    
-    for episode in range(EPISODES):
-        obs, _ = env.reset()
-        learning_rate = update_learning_rate(episode)
-        epsilon = update_explore_rate(episode)
-
-        state = obs_to_state(obs)
-        total_reward = 0
-        done = False
-        
-        while not done:
-            # choose action using epsilon-greedy strategy
-            if np.random.random() < epsilon:
-                action = env.action_space.sample()
-            else:
-                action = np.argmax(Qvalue1[state])
-
-            # make a step and update the state
-            obs, reward, done, _, _ = env.step(action)
-            new_state = obs_to_state(obs)
-
-            # store experience in replay buffer
-            replay_buffer.append((state, action, reward, new_state, done))
-
-            # update Q-values using experience replay
-            if len(replay_buffer) >= 5:
-                experiences = np.array(random.sample(replay_buffer, 5))
-
-                states, actions, rewards, next_states, dones = experiences.T
-                
-                Qvalue2[states, actions] += learning_rate * (rewards + np.max(Qvalue1[next_states], axis=1) * (1 - dones) - Qvalue2[states, actions])
-                Qvalue1[states, actions] += learning_rate * (rewards + np.max(Qvalue2[next_states], axis=1) * (1 - dones) - Qvalue1[states, actions])
-
-            total_reward += reward
-            state = new_state
-
-        if episode % 200 == 0:
-            print('Iteration #%d -- Total reward = %d.' % (episode + 1, total_reward))
-
-    return Qvalue1
 
 def SARSA():
   Qvalue = np.random.rand(NB_STATES, env.action_space.n)
@@ -236,8 +189,9 @@ def SARSA():
       
   return Qvalue
 
-Qvalue = DQ_learning()
+Qvalue = QQ_learning()
 # Qvalue = SARSA()
+# Qvalue = Q_learning()
 policy = np.argmax(Qvalue, axis=1)
 
 policy_scores = [run_episode(env, policy) for _ in range(100)]
